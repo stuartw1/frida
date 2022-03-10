@@ -22,7 +22,7 @@ packages = \
 	$(NULL)
 
 
-ifeq ($(host_os), $(filter $(host_os), macos ios))
+ifeq ($(host_os), $(filter $(host_os), macos ios tvos))
 # Pull in iconv so our payloads only depend on libSystem.
 glib_deps += libiconv
 endif
@@ -39,13 +39,13 @@ ifeq ($(host_os), android)
 packages += selinux
 endif
 
-ifeq ($(host_os), $(filter $(host_os), macos ios linux android freebsd))
+ifeq ($(host_os), $(filter $(host_os), macos ios tvos linux android freebsd))
 packages += glib-networking libnice usrsctp
 endif
 
 ifneq ($(FRIDA_V8), disabled)
 packages += v8
-ifeq ($(host_os), $(filter $(host_os), macos ios))
+ifeq ($(host_os), $(filter $(host_os), macos ios tvos))
 ifeq ($(FRIDA_ASAN), no)
 packages += libcxx
 endif
@@ -73,7 +73,7 @@ else
 xcode_platform := iPhoneOS
 endif
 endif
-ifeq ($(host_os), $(filter $(host_os), macos ios))
+ifeq ($(host_os), $(filter $(host_os), macos ios tvos))
 xcode_developer_dir := $(shell $(xcode_env_setup); xcode-select -print-path)
 xcode_sdk_version := $(shell $(xcode_env_setup); $(xcode_run) --sdk $(shell echo $(xcode_platform) | tr A-Z a-z) --show-sdk-version | cut -f1-2 -d'.')
 endif
@@ -208,7 +208,15 @@ v8_platform_args := \
 	ios_deployment_target="8.0" \
 	$(NULL)
 endif
-ifeq ($(host_os), $(filter $(host_os), macos ios))
+ifeq ($(host_os), tvos)
+v8_os := tvos
+v8_platform_args := \
+	use_xcode_clang=true \
+	mac_deployment_target="10.9" \
+	tvos_deployment_target="8.0" \
+	$(NULL)
+endif
+ifeq ($(host_os), $(filter $(host_os), macos ios tvos))
 ifeq ($(host_arch), $(filter $(host_arch), arm64 arm64e arm64eoabi))
 v8_platform_args += v8_enable_pointer_compression=false
 endif
@@ -254,6 +262,11 @@ endif
 ifneq ($(IOS_SDK_ROOT),)
 ifeq ($(host_os), ios)
 v8_platform_args += ios_sdk_path="$(IOS_SDK_ROOT)"
+endif
+endif
+ifneq ($(TVOS_SDK_ROOT),)
+ifeq ($(host_os), tvos)
+v8_platform_args += tvos_sdk_path="$(TVOS_SDK_ROOT)"
 endif
 endif
 ifeq ($(host_os), freebsd)

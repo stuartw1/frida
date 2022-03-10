@@ -24,7 +24,7 @@ packages_for_build = \
 packages = $(packages_for_host) $(packages_for_build)
 
 
-ifeq ($(host_os), $(filter $(host_os), macos ios))
+ifeq ($(host_os), $(filter $(host_os), macos ios tvos))
 export_ldflags := -Wl,-exported_symbols_list,$(shell pwd)/build/ft-executable.symbols
 else
 export_ldflags := -Wl,--version-script,$(shell pwd)/build/ft-executable.version

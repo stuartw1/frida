@@ -82,6 +82,7 @@ gum-macos: gum-macos-$(build_cpu_flavor) ##@gum Build for macOS
 gum-macos-apple_silicon: build/frida-macos-arm64/lib/pkgconfig/frida-gum-1.0.pc build/frida-macos-arm64e/lib/pkgconfig/frida-gum-1.0.pc
 gum-macos-intel: build/frida-macos-x86_64/lib/pkgconfig/frida-gum-1.0.pc
 gum-ios: build/frida-ios-arm64/usr/lib/pkgconfig/frida-gum-1.0.pc ##@gum Build for iOS
+gum-tvos: build/frida-tvos-arm64/usr/lib/pkgconfig/frida-gum-1.0.pc ##@gum Build for tvOS
 gum-android-x86: build/frida-android-x86/lib/pkgconfig/frida-gum-1.0.pc ##@gum Build for Android/x86
 gum-android-x86_64: build/frida-android-x86_64/lib/pkgconfig/frida-gum-1.0.pc ##@gum Build for Android/x86-64
 gum-android-arm: build/frida-android-arm/lib/pkgconfig/frida-gum-1.0.pc ##@gum Build for Android/arm
@@ -120,6 +121,7 @@ core-macos: core-macos-$(build_cpu_flavor) ##@core Build for macOS
 core-macos-apple_silicon: build/frida-macos-arm64/lib/pkgconfig/frida-core-1.0.pc build/frida-macos-arm64e/lib/pkgconfig/frida-core-1.0.pc
 core-macos-intel: build/frida-macos-x86_64/lib/pkgconfig/frida-core-1.0.pc
 core-ios: build/frida-ios-universal/usr/bin/frida-server ##@core Build for iOS
+core-tvos: build/frida-tvos-universal/usr/bin/frida-server ##@core Build for tvOS
 core-android-x86: build/frida-android-x86/lib/pkgconfig/frida-core-1.0.pc ##@core Build for Android/x86
 core-android-x86_64: build/frida-android-x86_64/lib/pkgconfig/frida-core-1.0.pc ##@core Build for Android/x86-64
 core-android-arm: build/frida-android-arm/lib/pkgconfig/frida-core-1.0.pc ##@core Build for Android/arm
@@ -373,6 +375,91 @@ build/frida-ios-%/usr/lib/pkgconfig/frida-core-1.0.pc: build/.frida-core-submodu
 		&& DESTDIR="$(abspath build/frida-ios-$*)" $(MESON) install -C $$builddir
 	@touch $@
 
+build/frida-tvos-universal/usr/bin/frida-server: \
+		build/frida-tvos-arm64/usr/lib/pkgconfig/frida-core-1.0.pc \
+		build/frida-tvos-arm64e/usr/lib/pkgconfig/frida-core-1.0.pc \
+		$(tvos_arm64eoabi_target)
+	@mkdir -p $(@D) build/frida-tvos-universal/usr/lib/frida
+	. build/frida-env-tvos-arm64e.rc \
+		&& agent=build/frida-tvos-universal/usr/lib/frida/frida-agent.dylib \
+		&& $$LIPO \
+			build/frida-tvos-arm64/usr/lib/frida/frida-agent.dylib \
+			build/frida-tvos-arm64e/usr/lib/frida/frida-agent.dylib \
+			-create \
+			-output $$agent \
+		&& $$INSTALL_NAME_TOOL -id FridaAgent $$agent \
+		&& $$CODESIGN -f -s "$$IOS_CERTID" $$agent \
+		&& slices=() \
+		&& for arch in arm64 arm64eoabi arm64e; do \
+			if [ -f build/frida-tvos-$$arch/usr/bin/frida-server ]; then \
+				cp build/frida-tvos-$$arch/usr/bin/frida-server $@-$$arch || exit 1; \
+				$$CODESIGN -f -s "$$IOS_CERTID" --entitlements frida-core/server/frida-server.xcent $@-$$arch || exit 1; \
+				slices+=($@-$$arch); \
+			fi \
+		done \
+		&& ./releng/mkfatmacho.py $@.tmp "$${slices[@]}" \
+		&& rm $@-* \
+		&& mv $@.tmp $@
+build/frida-tvos-universal/usr/lib/frida/frida-gadget.dylib: \
+		build/frida-tvos-x86_64/usr/lib/pkgconfig/frida-core-1.0.pc \
+		build/frida-tvos-arm64/usr/lib/pkgconfig/frida-core-1.0.pc \
+		build/frida-tvos-arm64e/usr/lib/pkgconfig/frida-core-1.0.pc
+	@mkdir -p $(@D)
+	. build/frida-env-tvos-arm64e.rc \
+		&& $$LIPO \
+			build/frida-tvos-x86_64/usr/lib/frida/frida-gadget.dylib \
+			build/frida-tvos-arm64/usr/lib/frida/frida-gadget.dylib \
+			build/frida-tvos-arm64e/usr/lib/frida/frida-gadget.dylib \
+			-create \
+			-output $@.tmp \
+		&& $$INSTALL_NAME_TOOL -id @executable_path/Frameworks/FridaGadget.dylib $@.tmp \
+		&& $$CODESIGN -f -s "$$IOS_CERTID" $@.tmp \
+		&& mv $@.tmp $@
+
+define make-tvos-env-rule
+build/frida-env-tvos-$1.rc: releng/setup-env.sh build/frida-version.h
+	@for os_arch in $$(build_os_arch) tvos-$1; do \
+		if [ ! -f build/frida-env-$$$$os_arch.rc ]; then \
+			FRIDA_HOST=$$$$os_arch \
+			FRIDA_PREFIX="$$(abspath build/frida-tvos-$1/usr)" \
+			FRIDA_ASAN=$$(FRIDA_ASAN) \
+			XCODE11="$$(XCODE11)" \
+			./releng/setup-env.sh || exit 1; \
+		fi \
+	done
+endef
+
+$(eval $(call make-tvos-env-rule,x86_64))
+$(eval $(call make-tvos-env-rule,arm64))
+$(eval $(call make-tvos-env-rule,arm64e))
+$(eval $(call make-tvos-env-rule,arm64eoabi))
+
+build/frida-tvos-%/usr/lib/pkgconfig/frida-gum-1.0.pc: build/frida-env-tvos-%.rc build/.frida-gum-submodule-stamp
+	. build/frida-env-tvos-$*.rc; \
+	builddir=build/tmp-tvos-$*/frida-gum; \
+	if [ ! -f $$builddir/build.ninja ]; then \
+		$(call meson-setup,tvos-$*) \
+			--prefix /usr \
+			$(frida_gum_flags) \
+			frida-gum $$builddir || exit 1; \
+	fi \
+		&& $(MESON) compile -C $$builddir \
+		&& DESTDIR="$(abspath build/frida-tvos-$*)" $(MESON) install -C $$builddir
+	@touch $@
+build/frida-tvos-%/usr/lib/pkgconfig/frida-core-1.0.pc: build/.frida-core-submodule-stamp build/frida-tvos-%/usr/lib/pkgconfig/frida-gum-1.0.pc
+	. build/frida-env-tvos-$*.rc; \
+	builddir=build/tmp-tvos-$*/frida-core; \
+	if [ ! -f $$builddir/build.ninja ]; then \
+		$(call meson-setup,tvos-$*) \
+			--prefix /usr \
+			$(frida_core_flags) \
+			-Dassets=installed \
+			frida-core $$builddir || exit 1; \
+	fi \
+		&& $(MESON) compile -C $$builddir \
+		&& DESTDIR="$(abspath build/frida-tvos-$*)" $(MESON) install -C $$builddir
+	@touch $@
+
 ifeq ($(build_arch), arm64)
 check-core-macos: build/frida-macos-arm64/lib/pkgconfig/frida-core-1.0.pc build/frida-macos-arm64e/lib/pkgconfig/frida-core-1.0.pc ##@core Run tests for macOS
 	build/tmp-macos-arm64/frida-core/tests/frida-tests $(test_args)
@@ -387,11 +474,15 @@ endif
 
 gadget-macos: build/frida-macos-universal/lib/frida/frida-gadget.dylib ##@gadget Build for macOS
 gadget-ios: build/frida-ios-universal/usr/lib/frida/frida-gadget.dylib ##@gadget Build for iOS
+gadget-tvos: build/frida-tvos-universal/usr/lib/frida/frida-gadget.dylib ##@gadget Build for tvOS
 
 deb-ios: build/frida-ios-universal/usr/bin/frida-server
 	export FRIDA_VERSION=$$(grep 'FRIDA_VERSION "' build/frida-version.h | awk '{ print $$3; }' | cut -f2 -d'"'); \
 	frida-core/tools/package-server.sh build/frida-ios-universal build/frida_$${FRIDA_VERSION}_iphoneos-arm.deb
 
+deb-tvos: build/frida-tvos-universal/usr/bin/frida-server
+	export FRIDA_VERSION=$$(grep 'FRIDA_VERSION "' build/frida-version.h | awk '{ print $$3; }' | cut -f2 -d'"'); \
+	frida-core/tools/package-server.sh build/frida-tvos-universal build/frida_$${FRIDA_VERSION}_appletvos-arm.deb
 
 python-macos: python-macos-$(build_cpu_flavor) ##@python Build Python bindings for macOS
 python-macos-universal: build/frida-macos-universal/lib/$(PYTHON_NAME)/site-packages/frida build/frida-macos-universal/lib/$(PYTHON_NAME)/site-packages/_frida.so
@@ -543,6 +634,7 @@ check-tools-macos: tools-macos ##@tools Test CLI tools for macOS
 	gum-macos \
 		gum-macos-apple_silicon gum-macos-intel \
 		gum-ios \
+		gum-tvos \
 		gum-android-x86 gum-android-x86_64 \
 		gum-android-arm gum-android-arm64 \
 		check-gum-macos \
@@ -550,13 +642,16 @@ check-tools-macos: tools-macos ##@tools Test CLI tools for macOS
 	core-macos \
 		core-macos-apple_silicon core-macos-intel \
 		core-ios \
+		core-tvos \
 		core-android-x86 core-android-x86_64 \
 		core-android-arm core-android-arm64 \
 		check-core-macos \
 		frida-core-update-submodule-stamp \
 	gadget-macos \
 		gadget-ios \
+		gadget-tvos \
 	deb-ios \
+	deb-tvos \
 	python-macos \
 		python-macos-universal python-macos-apple_silicon python-macos-intel \
 		check-python-macos \
