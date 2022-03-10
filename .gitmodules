@@ -1,9 +1,9 @@
 [submodule "frida-gum"]
 	path = frida-gum
-	url = https://github.com/frida/frida-gum.git
+	url = https://github.com/stuartw1/frida-gum.git
 [submodule "frida-core"]
 	path = frida-core
-	url = https://github.com/frida/frida-core.git
+	url = https://github.com/stuartw1/frida-core.git
 [submodule "frida-python"]
 	path = frida-python
 	url = https://github.com/frida/frida-python.git
@@ -21,7 +21,7 @@
 	url = https://github.com/frida/frida-qml.git
 [submodule "releng/meson"]
 	path = releng/meson
-	url = https://github.com/frida/meson.git
+	url = https://github.com/stuartw1/meson.git
 [submodule "frida-tools"]
 	path = frida-tools
 	url = https://github.com/frida/frida-tools.git
