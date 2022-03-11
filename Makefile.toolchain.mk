@@ -2,7 +2,7 @@ include config.mk
 include releng/deps.mk
 
 
-MAKE_J ?= -j 8
+MAKE_J ?= -j 1
 SHELL := $(shell which bash)
 
 
@@ -137,6 +137,7 @@ build/ft-%/manifest/ninja.pkg: build/ft-env-%.rc deps/.ninja-stamp
 			FRIDA_HOST=$(build_os_arch) \
 			build/ft-$(build_os_arch)/manifest/ninja.pkg || exit 1; \
 	fi
+	@echo debug1
 	@$(call print-status,ninja,Building for $*)
 	@prefix=$(shell pwd)/build/ft-$*; \
 	builddir=build/ft-tmp-$*/ninja; \
@@ -171,6 +172,7 @@ build/ft-%/manifest/ninja.pkg: build/ft-env-%.rc deps/.ninja-stamp
 	&& $(call print-status,ninja,Generating manifest) \
 	&& mkdir -p $(@D) \
 	&& echo "bin/ninja" > $@
+	@echo debug2
 
 
 build/ft-env-%.rc: build/ft-executable.symbols build/ft-executable.version

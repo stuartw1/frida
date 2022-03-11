@@ -220,6 +220,8 @@ if __name__ == '__main__':
     def upload_meta_modules_to_npm(node):
         for module in ["frida-gadget-ios"]:
             upload_meta_module_to_npm(node, module)
+        for module in ["frida-gadget-tvos"]:
+            upload_meta_module_to_npm(node, module)
 
     def upload_meta_module_to_npm(node, module_name):
         module_dir = os.path.join(build_dir, "releng", "modules", module_name)
@@ -287,6 +289,54 @@ if __name__ == '__main__':
                 uuid = [line.split(" ")[-1] for line in load_commands.split("\n") if "uuid " in line][0]
 
                 remote_dwarf_path = "/home/frida/public_html/symbols/ios/" + uuid + ".dwarf"
+                subprocess.check_call([scp, dwarf_path, "frida@192.168.1.2:" + remote_dwarf_path])
+        finally:
+            shutil.rmtree(output_dir)
+
+    def upload_tvos_deb(deb, upload_to_github):
+        filename = os.path.basename(deb)
+
+        subprocess.call([scp, deb, "frida@192.168.1.2:/home/frida/public_html/debs/"])
+        subprocess.call([ssh, "frida@192.168.1.2", " && ".join([
+                "cd /home/frida/public_html",
+                "reprepro -Vb . --confdir /home/frida/.reprepo --ignore=forbiddenchar includedeb stable debs/" + filename,
+                "cp dists/stable/main/binary-appletvos-arm/Packages.gz .",
+                "rm -f Packages",
+                "gunzip -k Packages.gz",
+                "s3cmd sync --delete-removed pool/ s3://build.frida.re/pool/",
+                "s3cmd put Release Packages Packages.gz s3://build.frida.re/",
+                "s3cmd put Packages Packages.gz s3://build.frida.re/./",
+            ])
+        ])
+        subprocess.call(["cfcli", "purge"] + ["https://build.frida.re" + resource for resource in [
+            "/Release",
+            "/Packages",
+            "/Packages.gz",
+            "/./Packages",
+            "/./Packages.gz",
+        ]])
+
+        with open(deb, 'rb') as f:
+            upload_to_github(filename, "vnd.debian.binary-package", f.read())
+
+    def upload_tvos_debug_symbols():
+        unstripped_tvos_binaries = [
+            "build/tmp-tvos-arm64/frida-core/server/frida-server-raw",
+            "build/tmp-tvos-arm64/frida-core/lib/agent/libfrida-agent-modulated.dylib",
+        ]
+
+        output_dir = tempfile.mkdtemp(prefix="frida-symbols")
+        try:
+            for binary_path in unstripped_tvos_binaries:
+                dwarf_name = os.path.basename(binary_path) + ".dwarf"
+                dwarf_path = os.path.join(output_dir, dwarf_name)
+
+                subprocess.check_call(["dsymutil", "-f", "--minimize", "-o", dwarf_path, binary_path], cwd=build_dir)
+
+                load_commands = subprocess.check_output(["otool", "-l", dwarf_path]).decode('utf-8')
+                uuid = [line.split(" ")[-1] for line in load_commands.split("\n") if "uuid " in line][0]
+
+                remote_dwarf_path = "/home/frida/public_html/symbols/tvos/" + uuid + ".dwarf"
                 subprocess.check_call([scp, dwarf_path, "frida@192.168.1.2:" + remote_dwarf_path])
         finally:
             shutil.rmtree(output_dir)
@@ -552,6 +602,18 @@ if __name__ == '__main__':
             upload_ios_deb(os.path.join(build_dir, "build", "frida_{}_iphoneos-arm.deb".format(version)), upload)
 
             upload_ios_debug_symbols()
+        elif builder == 'tvos':
+            upload = get_github_uploader()
+
+            upload_devkits("tvos-arm64", upload)
+            upload_devkits("tvos-arm64e", upload)
+
+            upload_file("frida-gadget-{version}-tvos-universal.dylib", os.path.join(build_dir, "build", "frida-tvos-universal", "usr", "lib", "frida", "frida-gadget.dylib"), upload)
+            upload_file("frida-gadget-{version}-tvos-universal.dylib", os.path.join(build_dir, "build", "frida-tvos-universal", "usr", "lib", "frida", "frida-gadget.dylib"), upload, compression='gz')
+
+            upload_tvos_deb(os.path.join(build_dir, "build", "frida_{}_appletvos-arm.deb".format(version)), upload)
+
+            upload_tvos_debug_symbols()
         elif builder == 'android':
             upload = get_github_uploader()
 

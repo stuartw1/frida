@@ -35,7 +35,7 @@ esac
 host_os_arch=${host_os}-${host_arch}
 
 case $host_os in
-  macos|ios)
+  macos|ios|tvos)
     meson_host_system=darwin
     ;;
   *)
@@ -658,6 +658,109 @@ case $host_os in
     meson_objc_link_args="$base_linker_args"
     meson_objcpp_link_args="$base_linker_args, '-stdlib=libc++'"
     ;;
+  tvos)
+    tvos_minver="8.0"
+
+    case $host_arch in
+      x86|x86_64)
+        tvos_sdk="appletvsimulator"
+        ;;
+      *)
+        tvos_sdk="appletvos"
+        ;;
+    esac
+    if [ -z "$TVOS_SDK_ROOT" ]; then
+      tvos_sdk_path="$($xcrun --sdk $tvos_sdk --show-sdk-path)"
+    else
+      tvos_sdk_path="$TVOS_SDK_ROOT"
+    fi
+
+    clang_cc="$($xcrun --sdk $tvos_sdk -f clang)"
+    clang_cxx="$($xcrun --sdk $tvos_sdk -f clang++)"
+
+    case $host_clang_arch in
+      arm)
+        tvos_arch=armv7
+        ;;
+      *)
+        tvos_arch=$host_clang_arch
+        ;;
+    esac
+
+    cc_wrapper=$FRIDA_BUILD/${FRIDA_ENV_NAME:-frida}-${host_os_arch}-clang
+    sed \
+      -e "s,@driver@,$clang_cc,g" \
+      -e "s,@sysroot@,$tvos_sdk_path,g" \
+      -e "s,@arch@,$tvos_arch,g" \
+      "$FRIDA_RELENG/driver-wrapper-xcode-default.sh.in" > "$cc_wrapper"
+    chmod +x "$cc_wrapper"
+
+    cxx_wrapper=$FRIDA_BUILD/${FRIDA_ENV_NAME:-frida}-${host_os_arch}-clang++
+    if [ $have_static_libcxx = yes ] && [ $enable_asan = no ]; then
+      sed \
+        -e "s,@driver@,$clang_cxx,g" \
+        -e "s,@sysroot@,$tvos_sdk_path,g" \
+        -e "s,@arch@,$tvos_arch,g" \
+        -e "s,@frida_sdkroot@,$FRIDA_SDKROOT,g" \
+        "$FRIDA_RELENG/driver-wrapper-xcode-static-libc++.sh.in" > "$cxx_wrapper"
+    else
+      sed \
+        -e "s,@driver@,$clang_cxx,g" \
+        -e "s,@sysroot@,$tvos_sdk_path,g" \
+        -e "s,@arch@,$tvos_arch,g" \
+        "$FRIDA_RELENG/driver-wrapper-xcode-default.sh.in" > "$cxx_wrapper"
+    fi
+    chmod +x "$cxx_wrapper"
+
+    ar_wrapper=$FRIDA_BUILD/${FRIDA_ENV_NAME:-frida}-${host_os_arch}-ar
+    sed \
+      -e "s,@ar@,$($xcrun --sdk $tvos_sdk -f ar),g" \
+      -e "s,@libtool@,$($xcrun --sdk $tvos_sdk -f libtool),g" \
+      "$FRIDA_RELENG/ar-wrapper-xcode.sh.in" > "$ar_wrapper"
+    chmod +x "$ar_wrapper"
+
+    CPP="$cc_wrapper -E"
+    CC="$cc_wrapper"
+    CXX="$cxx_wrapper"
+    OBJC="$cc_wrapper"
+    OBJCXX="$cxx_wrapper"
+    LD="$($xcrun --sdk $tvos_sdk -f ld)"
+
+    AR="$ar_wrapper"
+    NM="$($xcrun --sdk $tvos_sdk -f llvm-nm)"
+    RANLIB="$($xcrun --sdk $tvos_sdk -f ranlib)"
+    LIBTOOL="$($xcrun --sdk $tvos_sdk -f libtool)"
+    STRIP="$($xcrun --sdk $tvos_sdk -f strip)"
+    STRIP_FLAGS="-Sx"
+
+    INSTALL_NAME_TOOL="$($xcrun --sdk $tvos_sdk -f install_name_tool)"
+    OTOOL="$($xcrun --sdk $tvos_sdk -f otool)"
+    CODESIGN="$($xcrun --sdk $tvos_sdk -f codesign)"
+    LIPO="$($xcrun --sdk $tvos_sdk -f lipo)"
+
+    CPPFLAGS="-mappletvos-version-min=$tvos_minver"
+    CXXFLAGS="-stdlib=libc++"
+    LDFLAGS="-isysroot $tvos_sdk_path -arch $tvos_arch -Wl,-dead_strip"
+
+    base_toolchain_args="'-mappletvos-version-min=$tvos_minver'"
+    base_compiler_args="$base_toolchain_args"
+    base_linker_args="$base_toolchain_args, '-Wl,-dead_strip'"
+
+    meson_c="$CC"
+    meson_cpp="$CXX"
+    meson_objc="$CC"
+    meson_objcpp="$CXX"
+
+    meson_c_args="$base_compiler_args"
+    meson_cpp_args="$base_compiler_args, '-stdlib=libc++'"
+    meson_objc_args="$base_compiler_args"
+    meson_objcpp_args="$base_compiler_args, '-stdlib=libc++'"
+
+    meson_c_link_args="$base_linker_args"
+    meson_cpp_link_args="$base_linker_args, '-stdlib=libc++'"
+    meson_objc_link_args="$base_linker_args"
+    meson_objcpp_link_args="$base_linker_args, '-stdlib=libc++'"
+    ;;
   android)
     android_build_os=$(echo ${build_os} | sed 's,^macos$,darwin,')
     case $build_os in
@@ -908,7 +1011,7 @@ case $host_os in
 esac
 
 case $host_os_arch in
-  linux-armhf|ios-arm|android-arm)
+  linux-armhf|ios-arm|tvos-arm|android-arm)
     meson_c_args="$meson_c_args, '-mthumb'"
     meson_cpp_args="$meson_cpp_args, '-mthumb'"
     if [ -n "$meson_objc" ]; then
@@ -1037,7 +1140,7 @@ fi
 ) > $env_rc
 
 case $host_os in
-  macos|ios)
+  macos|ios|tvos)
     (
       echo "export INSTALL_NAME_TOOL=\"$INSTALL_NAME_TOOL\""
       echo "export OTOOL=\"$OTOOL\""

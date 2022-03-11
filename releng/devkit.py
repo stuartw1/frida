@@ -327,7 +327,7 @@ def generate_library_unix(package, frida_root, host, flavor, output_dir, library
         ar.communicate(input=raw_mri.encode('utf-8'))
         if ar.returncode != 0:
             raise Exception("ar failed")
-    elif host.startswith("macos-") or host.startswith("ios-"):
+    elif host.startswith("macos-") or host.startswith("ios-") or host.startswith("tvos-"):
         subprocess.check_output(["xcrun", "libtool", "-static", "-o", output_path] + library_paths)
     else:
         combined_dir = tempfile.mkdtemp(prefix="devkit")
@@ -438,7 +438,7 @@ def generate_example(filename, package, frida_root, host, kit, flavor, extra_ldf
         (cflags, ldflags) = tweak_flags(cflags, " ".join([" ".join(extra_ldflags), ldflags]))
 
         params = {
-            "cc": "clang" if host.split("-")[0] in ["macos", "ios", "android"] else "gcc",
+            "cc": "clang" if host.split("-")[0] in ["macos", "ios", "tvos", "android"] else "gcc",
             "cflags": cflags,
             "ldflags": ldflags,
             "source_filename": filename,
@@ -507,7 +507,7 @@ def compute_umbrella_header_path(frida_root, host, flavor, package, umbrella_hea
         else:
             raise Exception("Unhandled package")
     else:
-        prefix = ["usr"] if host.startswith("ios-") else []
+        prefix = ["usr"] if (host.startswith("ios-") or host.startswith("tvos-")) else []
         return os.path.join(frida_root, "build", "frida" + flavor + "-" + host, *prefix, "include", *umbrella_header)
 
 def sdk_lib_path(name, frida_root, host):
@@ -557,6 +557,8 @@ def tweak_flags(cflags, ldflags):
                     tweaked_ldflags.append("-isysroot \"$(xcrun --sdk macosx --show-sdk-path)\"")
                 elif "iPhoneOS" in sysroot:
                     tweaked_ldflags.append("-isysroot \"$(xcrun --sdk iphoneos --show-sdk-path)\"")
+                elif "AppleTVOS" in sysroot:
+                    tweaked_ldflags.append("-isysroot \"$(xcrun --sdk appletvos --show-sdk-path)\"")
                 continue
             elif flag == "-L":
                 pending_ldflags.pop(0)

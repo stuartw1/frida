@@ -126,7 +126,7 @@ glib_options = \
 	-Dglib_checks=false \
 	--force-fallback-for=pcre \
 	$(NULL)
-ifeq ($(host_os), $(filter $(host_os),macos ios))
+ifeq ($(host_os), $(filter $(host_os),macos ios tvos))
 # Use Apple's iconv by default to make our toolchain smaller.
 # Our SDK will pull in its own.
 glib_options += -Diconv=external
@@ -278,7 +278,7 @@ minizip_deps = \
 	$(NULL)
 minizip_deps_for_build = \
 	$(NULL)
-ifeq ($(host_os), $(filter $(host_os),macos ios android qnx))
+ifeq ($(host_os), $(filter $(host_os),macos ios tvos android qnx))
 minizip_deps += libiconv
 endif
 ifeq ($(FRIDA_LIBC), uclibc)
@@ -577,8 +577,8 @@ v8_deps_for_build = \
 v8_api_version = 8.0
 
 gn_name = GN
-gn_version = dd3501bfb77bafc41e7493c92e2684fa9709770b
-gn_url = $(frida_base_url)/gn.git
+gn_version = a96d30d5baa2c00623981b1e0e41a7934b11aa70
+gn_url = https://github.com/stuartw1/gn.git
 gn_hash = $(NULL)
 gn_recipe = custom
 gn_patches = \

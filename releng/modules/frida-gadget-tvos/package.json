@@ -1,0 +1,25 @@
+{
+  "name": "frida-gadget-tvos",
+  "version": "0.0.0",
+  "description": "Gadget for tvOS",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "install": "node download.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/frida/frida.git"
+  },
+  "keywords": [
+    "instrumentation",
+    "hooking",
+    "tvos"
+  ],
+  "author": "Frida Developers",
+  "license": "LGPL-2.0 WITH WxWindows-exception-3.1",
+  "bugs": {
+    "url": "https://github.com/frida/frida/issues"
+  },
+  "homepage": "https://github.com/frida/frida#readme"
+}
